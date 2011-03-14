@@ -85,6 +85,10 @@ THE SOFTWARE.
       }, t.widgets);
       delete t.widgets;
     }
+    var b = document.getElementById('GoogleBranding');
+    if (b) {
+      google.language.getBranding(b);
+    }
   }
   google.load('language', '1');
   google.setOnLoadCallback(initialize);
