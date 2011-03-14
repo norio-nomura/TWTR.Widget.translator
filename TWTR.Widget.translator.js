@@ -29,54 +29,61 @@ THE SOFTWARE.
   if (!TWTR || !TWTR.Widget || TWTR.Widget.translator) {
     return 
   }
-  function B(D, G, C)
-  {
+  function B(D, G, C) {
     for (var F = 0, E = D.length; F < E; ++F) {
       G.call(C || window, D[F], F, D)
     }
   }
   TWTR.Widget.translator = function (widget) {
-    if (TWTR.Widget.translator.enable) {
-      TWTR.Widget.translator.enable(widget);
-    } else {
-      TWTR.Widget.translator.widgets = TWTR.Widget.translator.widgets || {};
-      TWTR.Widget.translator.widgets[widget._widgetNumber] = widget;
-    }
-  }
-  function initialize () {
-    var systemLanguage = /^([^-]+)(?:-\S+)?$/.exec(window.navigator.language)[1];
-    TWTR.Widget.translator.enable = function (widget) {
-      var orgCallback = TWTR.Widget["receiveCallback_" + widget._widgetNumber];
-      if (orgCallback) {
-        TWTR.Widget.translator["receiveCallback_" + widget._widgetNumber] = orgCallback;
-        TWTR.Widget["receiveCallback_" + widget._widgetNumber] = function (p) {
+    var systemLanguage = /^([^-]+)(?:-\S+)?$/.exec(window.navigator.language)[1],
+        t = TWTR.Widget.translator,
+        widgetNumber = widget._widgetNumber,
+        cbName = 'receiveCallback_' + widgetNumber,
+        orgCallback = t[cbName] || (t[cbName] = TWTR.Widget[cbName]);
+    if (orgCallback) {
+      t.initialized = t.initialized || false;
+      if (t.initialized) {
+        var f = function (p) {
           var that = this, queue = null;
           B(p.results, function (q) {
-            if (q.iso_language_code !== systemLanguage) {
-              (queue || (queue = {}))[q.id_str] = function(r) {
-                if (r.detectedSourceLanguage != systemLanguage && r.translation) {
-                  q.text = r.translation;
-                }
-                delete queue[q.id_str];
-                if (!Object.keys(queue).length) {
-                  orgCallback.call(that, p);
-                }
+            (queue || (queue = {}))[q.id_str] = function(r) {
+              if (r.detectedSourceLanguage != systemLanguage && r.translation) {
+                q.text = r.translation;
               }
-              google.language.translate(q.text, '', systemLanguage, queue[q.id_str]);
+              delete queue[q.id_str];
+              if (!Object.keys(queue).length) {
+                orgCallback.call(that, p);
+              }
             }
+            google.language.translate(q.text, '', systemLanguage, queue[q.id_str]);
           });
           if (!queue) {
             orgCallback.call(that, p);
           }
         };
+        TWTR.Widget[cbName] = f;
+        if (t.stock[widgetNumber]) {
+          B(t.stock[widgetNumber], f, widget);
+          delete t.stock[widgetNumber];
+        }
+      } else {
+        (t.widgets || (t.widgets = [])).push(widget);
+        t.stock = t.stock || {};
+        TWTR.Widget[cbName] = function (p) {
+          (t.stock[widgetNumber] || (t.stock[widgetNumber] = [])).push(p);
+        };
       }
-      return widget;
-    };
-    if (TWTR.Widget.translator.widgets) {
-      B(Object.keys(TWTR.Widget.translator.widgets), function (k) {
-        TWTR.Widget.translator.enable(this[k]);
-        delete this[k];
-      }, TWTR.Widget.translator.widgets);
+    }
+    return widget;
+  };
+  function initialize () {
+    var t = TWTR.Widget.translator;
+    t.initialized = true;
+    if (t.widgets) {
+      B(t.widgets, function (widget) {
+        t(widget);
+      }, t.widgets);
+      delete t.widgets;
     }
   }
   google.load('language', '1');
